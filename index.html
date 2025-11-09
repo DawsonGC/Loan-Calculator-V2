@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mortgage Calculator</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        form { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 10px; }
+        input, select { margin-left: 10px; padding: 5px; }
+        #results { margin: 20px 0; font-size: 18px; }
+        canvas { max-width: 100%; }
+    </style>
+</head>
+<body>
+    <h1>Mortgage Calculator</h1>
+    <form id="mortgageForm">
+        <label>
+            House Cost ($): <input type="number" id="cost" step="0.01" min="0" required>
+        </label>
+        <label>
+            Down Payment ($): <input type="number" id="down" step="0.01" min="0" required>
+        </label>
+        <label>
+            Annual Interest Rate (%): <input type="number" id="rate" step="0.01" min="0" required>
+        </label>
+        <label>
+            Loan Duration (years):
+            <select id="years">
+                <option value="10">10</option>
+                <option value="15">15</option>
+                <option value="30" selected>30</option>
+                <option value="50">50</option>
+                <option value="custom">Custom</option>
+            </select>
+            <input type="number" id="customYears" step="1" min="1" placeholder="Enter years" style="display: none;">
+        </label>
+        <button type="submit">Calculate</button>
+    </form>
+    <div id="results"></div>
+    <canvas id="chart"></canvas>
+
+    <script>
+        // Handle custom years input visibility
+        document.getElementById('years').addEventListener('change', function() {
+            const customInput = document.getElementById('customYears');
+            customInput.style.display = this.value === 'custom' ? 'inline' : 'none';
+        });
+
+        // Mortgage calculation
+        document.getElementById('mortgageForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const cost = parseFloat(document.getElementById('cost').value);
+            const down = parseFloat(document.getElementById('down').value);
+            const rate = parseFloat(document.getElementById('rate').value);
+            const yearsSelect = document.getElementById('years').value;
+            const customYearsValue = parseFloat(document.getElementById('customYears').value);
+
+            let years;
+            if (yearsSelect === 'custom') {
+                if (isNaN(customYearsValue) || customYearsValue <= 0) {
+                    alert('Please enter a valid custom number of years.');
+                    return;
+                }
+                years = customYearsValue;
+            } else {
+                years = parseInt(yearsSelect);
+            }
+
+            const principal = cost - down;
+            if (principal <= 0) {
+                alert('Down payment cannot exceed house cost.');
+                return;
+            }
+
+            if (isNaN(rate) || rate <= 0) {
+                alert('Please enter a valid interest rate greater than 0.');
+                return;
+            }
+
+            const monthlyRate = rate / 100 / 12;
+            const months = years * 12;
+
+            // Monthly payment formula
+            const monthlyPayment = principal * (monthlyRate * Math.pow(1 + monthlyRate, months)) / (Math.pow(1 + monthlyRate, months) - 1);
+
+            const totalPaid = monthlyPayment * months;
+            const totalInterest = totalPaid - principal;
+
+            // Generate amortization schedule
+            let balance = principal;
+            const schedule = [];
+            for (let m = 1; m <= months; m++) {
+                const interest = balance * monthlyRate;
+                let principalPay = monthlyPayment - interest;
+                balance -= principalPay;
+                if (balance < 0) {
+                    balance = 0;
+                    principalPay = monthlyPayment - interest; // Adjust last payment if needed
+                }
+                schedule.push({
+                    month: m,
+                    interest: Math.round(interest * 100) / 100,
+                    principal: Math.round(principalPay * 100) / 100
+                });
+            }
+
+            // Display results
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = `
+                <p><strong>Monthly Payment:</strong> $${monthlyPayment.toFixed(2)}</p>
+                <p><strong>Total Interest Paid:</strong> $${totalInterest.toFixed(2)}</p>
+            `;
+
+            // Render chart
+            const ctx = document.getElementById('chart').getContext('2d');
+            if (window.myChart) {
+                window.myChart.destroy();
+            }
+            window.myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: schedule.map(s => `Month ${s.month}`),
+                    datasets: [
+                        {
+                            label: 'Interest Portion',
+                            data: schedule.map(s => s.interest),
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                            fill: false,
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Principal Portion',
+                            data: schedule.map(s => s.principal),
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                            fill: false,
+                            tension: 0.1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Month'
+                            },
+                            ticks: {
+                                maxTicksLimit: 20 // Limit x-axis ticks for long terms
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Amount ($)'
+                            },
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
